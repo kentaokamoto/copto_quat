@@ -1,10 +1,13 @@
-#include <cstdio>
+#include <memory>
+#include <rclcpp/rclcpp.hpp>
+#include <copto_quat/quat_component.hpp>
 
-int main(int argc, char ** argv)
+int main(int argc, char * argv[])
 {
-  (void) argc;
-  (void) argv;
-
-  printf("hello world copto_quad package\n");
+  rclcpp::init(argc, argv);
+  rclcpp::NodeOptions options;
+  auto component = std::make_shared<copto_quat::QUATComponent>(options);
+  rclcpp::spin(component);
+  rclcpp::shutdown();
   return 0;
 }
