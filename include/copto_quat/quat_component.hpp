@@ -78,7 +78,7 @@ public:
   rclcpp::Time imutimestamp;
 
 private:
-  float k = 0.001;
+  float k = 0.5;
   float eps = 0.5;
   float dt = 0.01;
   float g = 9.797;
