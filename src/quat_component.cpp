@@ -11,18 +11,19 @@ QUATComponent::QUATComponent(const rclcpp::NodeOptions & options) : Node("copto_
   A = Eigen::MatrixXd::Zero(7, 7);
   B = Eigen::MatrixXd::Zero(7, 6);
 
-  C = Eigen::MatrixXd::Zero(3, 7);
-  R = Eigen::MatrixXd::Zero(3, 3);
+  C = Eigen::MatrixXd::Zero(6, 7);
+  R = Eigen::MatrixXd::Zero(6, 6);
   Q = Eigen::MatrixXd::Zero(6, 6);
   E = Eigen::MatrixXd::Zero(3, 3);
 
-  K = Eigen::MatrixXd::Zero(7, 3);
-  S = Eigen::MatrixXd::Zero(3, 3);
+  K = Eigen::MatrixXd::Zero(7, 6);
+  S = Eigen::MatrixXd::Zero(6, 6);
   P = Eigen::MatrixXd::Zero(7, 7);
   I = Eigen::MatrixXd::Identity(7, 7);
 
   a = Eigen::VectorXd::Zero(3);
   am = Eigen::VectorXd::Zero(3);
+  m = Eigen::VectorXd::Zero(3);
   z = Eigen::VectorXd::Zero(3);
   G = Eigen::VectorXd::Zero(3);
   beta = Eigen::VectorXd::Zero(3);
@@ -30,7 +31,10 @@ QUATComponent::QUATComponent(const rclcpp::NodeOptions & options) : Node("copto_
   u = Eigen::VectorXd::Zero(6);
 
   IMUsubscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
-    "/imu", 10, std::bind(&QUATComponent::IMUtopic_callback, this, std::placeholders::_1));
+    "/copto/imu", 10, std::bind(&QUATComponent::IMUtopic_callback, this, std::placeholders::_1));
+
+  Magsubscription_ = this->create_subscription<sensor_msgs::msg::MagneticField>(
+    "/copto/mag", 10, std::bind(&QUATComponent::Magtopic_callback, this, std::placeholders::_1));
 
     Posepublisher_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/pose", 1);
 
@@ -49,6 +53,13 @@ void QUATComponent::IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg
   am << u(0), u(1), u(2);
     if(!initialized){init();}
     update();
+}
+
+void QUATComponent::Magtopic_callback(const sensor_msgs::msg::MagneticField::SharedPtr msg)
+{
+  m(0) = msg->magnetic_field.x;
+  m(1) = msg->magnetic_field.y;
+  m(2) = msg->magnetic_field.z;
 }
 
 void QUATComponent::LPF()
@@ -103,7 +114,12 @@ void QUATComponent::state_eq()
 
 void QUATComponent::observation_eq()
 {
-  z = E.transpose()*G + E.transpose()*a;
+  Eigen::Vector3d az;
+  Eigen::Vector3d mz;
+  az = E.transpose()*G + E.transpose()*a;
+  mz = E.transpose()*m;
+
+  z << az(0), az(1), az(2), mz(0), mz(1), mz(2);
 }
 
 void QUATComponent::jacobi()
@@ -126,7 +142,10 @@ void QUATComponent::jacobi()
 
   C <<  2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)+x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 2*(-x(0)*g-x(2)*a(0)+x(1)*a(1)-x(0)*a(2)), 2*(x(1)*g-x(3)*a(0)+x(0)*a(1)+x(1)*a(2)), 0, 0, 0,
         2*(x(1)*g-x(3)*a(0)+x(0)*a(1)+x(1)*a(2)), 2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 2*(x(2)*g-x(0)*a(0)-x(3)*a(1)+x(2)*a(2)), 0, 0, 0,
-        2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(1)*g+x(3)*a(0)-x(0)*a(1)-x(1)*a(2)), 2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)-x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 0, 0, 0;
+        2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(1)*g+x(3)*a(0)-x(0)*a(1)-x(1)*a(2)), 2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)-x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 0, 0, 0,
+        2*(x(0)*m(0)+x(3)*m(1)+x(2)*m(2)), 2*(x(1)*m(0)+x(2)*m(1)+x(3)*m(2)), 2*(-x(2)*m(0)+x(1)*m(1)-x(0)*m(2)), 2*(-x(3)*m(0)+x(0)*m(1)+x(1)*m(2)), 0, 0, 0,
+        2*(-x(3)*m(0)+x(0)*m(1)+x(1)*m(2)), 2*(x(2)*m(0)-x(1)*m(1)+x(0)*m(2)), 2*(x(1)*m(0)+x(2)*m(1)+x(3)*m(2)), 2*(-x(0)*m(0)-x(3)*m(1)+x(2)*m(2)), 0, 0, 0,
+        2*(x(2)*m(0)-x(1)*m(1)+x(0)*m(2)), 2*(x(3)*m(0)-x(0)*m(1)-x(1)*m(2)), 2*(x(0)*m(0)+x(3)*m(1)-x(2)*m(2)), 2*(x(1)*m(0)+x(2)*m(1)+x(3)*m(2)), 0, 0, 0;
 
   /*
   C <<  2*(-x(2)*g), 2*(x(3)*g), 2*(-x(0)*g), 2*(x(1)*g), 0, 0, 0,

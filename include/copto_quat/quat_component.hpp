@@ -46,6 +46,7 @@ extern "C" {
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 
 #include "sensor_msgs/msg/imu.hpp"
+#include "sensor_msgs/msg/magnetic_field.hpp"
 
 namespace copto_quat
 {
@@ -62,6 +63,7 @@ public:
   Eigen::VectorXd u;
   Eigen::VectorXd a;
   Eigen::VectorXd am;
+  Eigen::VectorXd m;
   Eigen::VectorXd beta;
   
   Eigen::MatrixXd I;
@@ -83,6 +85,7 @@ private:
   float dt = 0.01;
   float g = 9.797;
   void IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
+  void Magtopic_callback(const sensor_msgs::msg::MagneticField::SharedPtr msg);
   void state_eq();
   void observation_eq();
   void prefilter();
@@ -91,6 +94,7 @@ private:
   bool init();
   void update();
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr IMUsubscription_;
+  rclcpp::Subscription<sensor_msgs::msg::MagneticField>::SharedPtr Magsubscription_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr Posepublisher_;
 };
 }  // namespace copto_quat
