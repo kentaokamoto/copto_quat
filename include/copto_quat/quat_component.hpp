@@ -80,10 +80,10 @@ public:
   rclcpp::Time imutimestamp;
 
 private:
-  float k = 0.5;
-  float eps = 0.5;
-  float dt = 0.01;
-  float g = 9.797;
+  float k = 0.5; //lowpass parameter
+  float eps = 0.5; 
+  float dt = 0.01; 
+  float g = 9.81; // gravity acceleration
   void IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
   void Magtopic_callback(const sensor_msgs::msg::MagneticField::SharedPtr msg);
   void state_eq();

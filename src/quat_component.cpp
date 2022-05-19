@@ -36,7 +36,7 @@ QUATComponent::QUATComponent(const rclcpp::NodeOptions & options) : Node("copto_
   Magsubscription_ = this->create_subscription<sensor_msgs::msg::MagneticField>(
     "/copto/mag", 10, std::bind(&QUATComponent::Magtopic_callback, this, std::placeholders::_1));
 
-    Posepublisher_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/pose", 1);
+  Posepublisher_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/copto/pose", 1);
 
 }
 
