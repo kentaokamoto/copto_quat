@@ -24,11 +24,13 @@ QUATComponent::QUATComponent(const rclcpp::NodeOptions & options) : Node("copto_
   a = Eigen::VectorXd::Zero(3);
   am = Eigen::VectorXd::Zero(3);
   m = Eigen::VectorXd::Zero(3);
-  z = Eigen::VectorXd::Zero(3);
+  z = Eigen::VectorXd::Zero(6);
   G = Eigen::VectorXd::Zero(3);
   beta = Eigen::VectorXd::Zero(3);
   x = Eigen::VectorXd::Zero(7);
   u = Eigen::VectorXd::Zero(6);
+  y = Eigen::VectorXd::Zero(6);
+  
 
   IMUsubscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
     "/copto/imu", 10, std::bind(&QUATComponent::IMUtopic_callback, this, std::placeholders::_1));
@@ -49,7 +51,7 @@ void QUATComponent::IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg
   u(3) = msg->angular_velocity.x;
   u(4) = msg->angular_velocity.y;
   u(5) = msg->angular_velocity.z;
-
+  
   am << u(0), u(1), u(2);
     if(!initialized){init();}
     update();
@@ -79,7 +81,8 @@ void QUATComponent::prefilter()
 
 bool QUATComponent::init()
 {
-  x << 1, 0, 0, 0, 0.01, 0.01, 0.01;
+  x << 1.0, 0.0, 0.0, 0.0, 0.01, 0.01, 0.01;
+  a << 0,0,9.81;
   P << 1, 0, 0, 0, 0, 0, 0,
       0, 1, 0, 0, 0, 0, 0,
       0, 0, 1, 0, 0, 0, 0,
@@ -89,6 +92,7 @@ bool QUATComponent::init()
       0, 0, 0, 0, 0, 0, 1;
   G << 0, 0, g;
   beta << 1, 1, 1;
+  std::cout << "Initialized" << std::endl;
   return initialized = true;
 }
 
@@ -115,15 +119,20 @@ void QUATComponent::state_eq()
 void QUATComponent::observation_eq()
 {
   Eigen::Vector3d az;
+ 
   Eigen::Vector3d mz;
+ 
   az = E.transpose()*G + E.transpose()*a;
   mz = E.transpose()*m;
 
   z << az(0), az(1), az(2), mz(0), mz(1), mz(2);
+
 }
 
 void QUATComponent::jacobi()
 {
+  y << a(0), a(1), a(2), m(0), m(1), m(2);
+
   A << 1, -(u(3)-x(4))*0.5*dt, -(u(4)-x(5))*0.5*dt, -(u(5)-x(6))*0.5*dt, x(1)*0.5*dt, x(2)*0.5*dt, x(3)*0.5*dt,
       (u(3)-x(4))*0.5*dt, 1, (u(5)-x(6))*0.5*dt, -(u(4)-x(5))*0.5*dt, -x(0)*0.5*dt, x(3)*0.5*dt, -x(2)*0.5*dt,
       (u(4)-x(5))*0.5*dt, -(u(5)-x(6))*0.5*dt, 1, (u(3)-x(4))*0.5*dt, -x(3)*0.5*dt, -x(0)*0.5*dt, x(1)*0.5*dt,
@@ -131,7 +140,7 @@ void QUATComponent::jacobi()
       0, 0, 0, 0, 1-beta(0)*dt, 0, 0,
       0, 0, 0, 0, 0, 1-beta(1)*dt, 0,
       0, 0, 0, 0, 0, 0, 1-beta(2)*dt;
-
+ 
   B << -dt, -dt, -dt, 0, 0, 0, 
         dt, -dt, dt, 0, 0, 0,
         dt, dt, -dt, 0, 0, 0,
@@ -139,7 +148,7 @@ void QUATComponent::jacobi()
         0, 0, 0, dt, 0, 0,
         0, 0, 0, 0, dt, 0,
         0, 0, 0, 0, 0, dt;
-
+ 
   C <<  2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)+x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 2*(-x(0)*g-x(2)*a(0)+x(1)*a(1)-x(0)*a(2)), 2*(x(1)*g-x(3)*a(0)+x(0)*a(1)+x(1)*a(2)), 0, 0, 0,
         2*(x(1)*g-x(3)*a(0)+x(0)*a(1)+x(1)*a(2)), 2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 2*(x(2)*g-x(0)*a(0)-x(3)*a(1)+x(2)*a(2)), 0, 0, 0,
         2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(1)*g+x(3)*a(0)-x(0)*a(1)-x(1)*a(2)), 2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)-x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 0, 0, 0,
@@ -153,9 +162,13 @@ void QUATComponent::jacobi()
         2*(x(0)*g), 2*(-x(1)*g), 2*(-x(2)*g), 2*(x(3)*g), 0, 0, 0;
   */
 
-  R << 10, 0, 0,
-       0, 10, 0,
-       0, 0, 10;
+  R << 10, 0, 0, 0, 0, 0,
+       0, 10, 0, 0, 0, 0,
+       0, 0, 10, 0, 0, 0,
+       0, 0, 0, 10, 0, 0,
+       0, 0, 0, 0, 10, 0,
+       0, 0, 0, 0, 0, 10;
+
 
   Q << 1, 0, 0, 0, 0, 0,
        0, 1, 0, 0, 0, 0,
@@ -163,7 +176,6 @@ void QUATComponent::jacobi()
        0, 0, 0, 1, 0, 0,
        0, 0, 0, 0, 1, 0,
        0, 0, 0, 0, 0, 1;
-
   // frame_base -> Inertial_base
   E << (x(0) * x(0) + x(1) * x(1) - x(2) * x(2) - x(3) * x(3)),
     2 * (x(1) * x(2) - x(0) * x(3)), 2 * (x(1) * x(3) + x(0) * x(2)), 
@@ -185,14 +197,15 @@ void QUATComponent::update()
     state_eq();
     jacobi();
     // filtering step 1
+    
     P = A * P * A.transpose() + B * Q * B.transpose();
     S = C * P * C.transpose() + R;
     K = P * C.transpose() * S.inverse();
 
     observation_eq();
-    x = x + K * (am - z);
+    x = x + K * (y - z);
     P = (I - K * C) * P;
-
+    
     geometry_msgs::msg::PoseWithCovarianceStamped pose_msg;
     pose_msg.header.frame_id = "map";
     pose_msg.header.stamp = imutimestamp;
@@ -201,7 +214,6 @@ void QUATComponent::update()
     pose_msg.pose.pose.orientation.x = x(1);
     pose_msg.pose.pose.orientation.y = x(2);
     pose_msg.pose.pose.orientation.z = x(3);
-
     Posepublisher_->publish(pose_msg);
 
 }

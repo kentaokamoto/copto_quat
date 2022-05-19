@@ -60,6 +60,7 @@ public:
   Eigen::MatrixXd P;
   Eigen::VectorXd x;
   Eigen::VectorXd z;
+  Eigen::VectorXd y;
   Eigen::VectorXd u;
   Eigen::VectorXd a;
   Eigen::VectorXd am;
@@ -75,7 +76,7 @@ public:
   Eigen::MatrixXd K;
   Eigen::MatrixXd S;
   Eigen::MatrixXd E;
-  Eigen::MatrixXd G;
+  Eigen::VectorXd G;
 
   rclcpp::Time imutimestamp;
 
