@@ -1,8 +1,10 @@
 #include <Eigen/Dense>
 #include <cmath>
+#include <chrono>
 #include <copto_quat/quat_component.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
+using namespace  std::chrono_literals;
 namespace copto_quat
 {
 QUATComponent::QUATComponent(const rclcpp::NodeOptions & options) : Node("copto_quat_node", options)
@@ -30,10 +32,11 @@ QUATComponent::QUATComponent(const rclcpp::NodeOptions & options) : Node("copto_
   u = Eigen::VectorXd::Zero(6);
 
   IMUsubscription_ = this->create_subscription<sensor_msgs::msg::Imu>(
-    "/imu", 10, std::bind(&QUATComponent::IMUtopic_callback, this, std::placeholders::_1));
+    "/copto/imu", 10, std::bind(&QUATComponent::IMUtopic_callback, this, std::placeholders::_1));
 
-    Posepublisher_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/pose", 1);
+  Posepublisher_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/copto/pose", 1);
 
+  timer_ = this->create_wall_timer(10ms, std::bind(&QUATComponent::update, this));
 }
 
 void QUATComponent::IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg)
@@ -47,8 +50,6 @@ void QUATComponent::IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg
   u(5) = msg->angular_velocity.z;
 
   am << u(0), u(1), u(2);
-    if(!initialized){init();}
-    update();
 }
 
 void QUATComponent::LPF()
@@ -58,26 +59,29 @@ void QUATComponent::LPF()
 
 void QUATComponent::prefilter()
 {
-  a = E * am - G;
+  Eigen::VectorXd a_dr(3);
+  a_dr = E.transpose() * a - G;
+  a = a - E * a_dr;
   double norm_am = std::sqrt(u(0)*u(0)+u(1)*u(1)+u(2)*u(2));
     if(norm_am < g + eps)
     {
-      a << 0, 0, 0;
+      a_dr << 0, 0, 0;
     }
+  a = a + E * a_dr;
 }
 
 bool QUATComponent::init()
 {
   x << 1, 0, 0, 0, 0.01, 0.01, 0.01;
-  P << 1, 0, 0, 0, 0, 0, 0,
-      0, 1, 0, 0, 0, 0, 0,
-      0, 0, 1, 0, 0, 0, 0,
-      0, 0, 0, 1, 0, 0, 0,
+  P << 10, 0, 0, 0, 0, 0, 0,
+      0, 10, 0, 0, 0, 0, 0,
+      0, 0, 10, 0, 0, 0, 0,
+      0, 0, 0, 10, 0, 0, 0,
       0, 0, 0, 0, 1, 0, 0,
       0, 0, 0, 0, 0, 1, 0,
       0, 0, 0, 0, 0, 0, 1;
-  G << 0, 0, g;
-  beta << 1, 1, 1;
+  G << 0, 0, -g;
+  beta << 0.1, 0.1, 0.1;
   return initialized = true;
 }
 
@@ -103,7 +107,7 @@ void QUATComponent::state_eq()
 
 void QUATComponent::observation_eq()
 {
-  z = E.transpose()*G + E.transpose()*a;
+  z = E*G;
 }
 
 void QUATComponent::jacobi()
@@ -124,9 +128,9 @@ void QUATComponent::jacobi()
         0, 0, 0, 0, dt, 0,
         0, 0, 0, 0, 0, dt;
 
-  C <<  2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)+x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 2*(-x(0)*g-x(2)*a(0)+x(1)*a(1)-x(0)*a(2)), 2*(x(1)*g-x(3)*a(0)+x(0)*a(1)+x(1)*a(2)), 0, 0, 0,
-        2*(x(1)*g-x(3)*a(0)+x(0)*a(1)+x(1)*a(2)), 2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 2*(x(2)*g-x(0)*a(0)-x(3)*a(1)+x(2)*a(2)), 0, 0, 0,
-        2*(x(0)*g+x(2)*a(0)-x(1)*a(1)+x(0)*a(2)), 2*(-x(1)*g+x(3)*a(0)-x(0)*a(1)-x(1)*a(2)), 2*(-x(2)*g+x(0)*a(0)+x(3)*a(1)-x(2)*a(2)), 2*(x(3)*g+x(1)*a(0)+x(2)*a(1)+x(3)*a(2)), 0, 0, 0;
+  C <<  2*-x(2)*(-g), 2*x(3)*(-g), 2*-x(0)*(-g), 2*x(1)*(-g), 0, 0, 0,
+        2*x(1)*(-g), 2*x(0)*(-g), 2*-x(3)*(-g), 2*x(2)*(-g), 0, 0, 0,
+        2*x(0)*(-g), 2*-x(1)*(-g), 2*-x(2)*(-g), 2*x(3)*(-g), 0, 0, 0;
 
   /*
   C <<  2*(-x(2)*g), 2*(x(3)*g), 2*(-x(0)*g), 2*(x(1)*g), 0, 0, 0,
@@ -134,16 +138,16 @@ void QUATComponent::jacobi()
         2*(x(0)*g), 2*(-x(1)*g), 2*(-x(2)*g), 2*(x(3)*g), 0, 0, 0;
   */
 
-  R << 10, 0, 0,
-       0, 10, 0,
-       0, 0, 10;
+  R << 100, 0, 0,
+       0, 100, 0,
+       0, 0, 100;
 
-  Q << 1, 0, 0, 0, 0, 0,
-       0, 1, 0, 0, 0, 0,
-       0, 0, 1, 0, 0, 0,
-       0, 0, 0, 1, 0, 0,
-       0, 0, 0, 0, 1, 0,
-       0, 0, 0, 0, 0, 1;
+  Q << 10, 0, 0, 0, 0, 0,
+       0, 10, 0, 0, 0, 0,
+       0, 0, 10, 0, 0, 0,
+       0, 0, 0, 10, 0, 0,
+       0, 0, 0, 0, 10, 0,
+       0, 0, 0, 0, 0, 10;
 
   // frame_base -> Inertial_base
   E << (x(0) * x(0) + x(1) * x(1) - x(2) * x(2) - x(3) * x(3)),
@@ -155,14 +159,14 @@ void QUATComponent::jacobi()
 
 void QUATComponent::update()
 {
+    if(!initialized){init();}
     if (!initialized) {
         std::cout << "NOT Initialized" << std::endl;
     }
 
     // 予測ステップ
-    
-    prefilter();
     LPF();
+    prefilter();
     state_eq();
     jacobi();
     // filtering step 1
@@ -171,7 +175,7 @@ void QUATComponent::update()
     K = P * C.transpose() * S.inverse();
 
     observation_eq();
-    x = x + K * (am - z);
+    x = x + K * (a - z);
     P = (I - K * C) * P;
 
     geometry_msgs::msg::PoseWithCovarianceStamped pose_msg;
