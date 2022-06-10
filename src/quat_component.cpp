@@ -71,12 +71,14 @@ void QUATComponent::LPF()
 
 void QUATComponent::prefilter()
 {
-  a = E * am - G;
+  Eigen::VectorXd a_dr(3);
+  a_dr = E * am - G;
   double norm_am = std::sqrt(u(0)*u(0)+u(1)*u(1)+u(2)*u(2));
     if(norm_am < g + eps)
     {
-      a << 0, 0, 0;
+      a_dr << 0, 0, 0;
     }
+  a = a - E*a_dr;
 }
 
 bool QUATComponent::init()
