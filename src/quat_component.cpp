@@ -60,28 +60,28 @@ void QUATComponent::LPF()
 void QUATComponent::prefilter()
 {
   Eigen::VectorXd a_dr(3);
-  a_dr = E.transpose() * a - G;
-  a = a - E * a_dr;
+  a_dr = E * a - G;
+  a = a - E.transpose() * a_dr;
   double norm_am = std::sqrt(u(0)*u(0)+u(1)*u(1)+u(2)*u(2));
     if(norm_am < g + eps)
     {
       a_dr << 0, 0, 0;
     }
-  a = a + E * a_dr;
+  a = a + E.transpose() * a_dr;
 }
 
 bool QUATComponent::init()
 {
   x << 1, 0, 0, 0, 0.01, 0.01, 0.01;
-  P << 10, 0, 0, 0, 0, 0, 0,
-      0, 10, 0, 0, 0, 0, 0,
-      0, 0, 10, 0, 0, 0, 0,
-      0, 0, 0, 10, 0, 0, 0,
-      0, 0, 0, 0, 1, 0, 0,
-      0, 0, 0, 0, 0, 1, 0,
-      0, 0, 0, 0, 0, 0, 1;
+  P << 1, 0, 0, 0, 0, 0, 0,
+      0, 1, 0, 0, 0, 0, 0,
+      0, 0, 1, 0, 0, 0, 0,
+      0, 0, 0, 1, 0, 0, 0,
+      0, 0, 0, 0, 10, 0, 0,
+      0, 0, 0, 0, 0, 10, 0,
+      0, 0, 0, 0, 0, 0, 10;
   G << 0, 0, -g;
-  beta << 0.1, 0.1, 0.1;
+  beta << 0.5, 0.5, 0.5;
   return initialized = true;
 }
 
@@ -107,7 +107,7 @@ void QUATComponent::state_eq()
 
 void QUATComponent::observation_eq()
 {
-  z = E*G;
+  z = E.transpose() * G;
 }
 
 void QUATComponent::jacobi()
@@ -138,9 +138,9 @@ void QUATComponent::jacobi()
         2*(x(0)*g), 2*(-x(1)*g), 2*(-x(2)*g), 2*(x(3)*g), 0, 0, 0;
   */
 
-  R << 100, 0, 0,
-       0, 100, 0,
-       0, 0, 100;
+  R << 10, 0, 0,
+       0, 10, 0,
+       0, 0, 10;
 
   Q << 10, 0, 0, 0, 0, 0,
        0, 10, 0, 0, 0, 0,

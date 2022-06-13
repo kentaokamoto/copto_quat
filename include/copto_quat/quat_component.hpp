@@ -79,7 +79,7 @@ public:
 
 private:
   float k = 0.6;
-  float eps = 0.1;
+  float eps = 0.05;
   float dt = 0.01;
   float g = 9.81;
   void IMUtopic_callback(const sensor_msgs::msg::Imu::SharedPtr msg);
