@@ -64,7 +64,6 @@ install(TARGETS quat_component
   RUNTIME DESTINATION bin
   )
 
-
 ament_export_libraries(quat_component)
 
 ament_export_include_directories(include)
